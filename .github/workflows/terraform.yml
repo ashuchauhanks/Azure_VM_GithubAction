@@ -66,6 +66,8 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        env:
+          TF_VAR_admin_password: ${{ secrets.TF_VAR_admin_password }}
         run: terraform plan -out=tfplan
 
       - name: Upload Terraform Plan
@@ -110,6 +112,8 @@ jobs:
           path: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Apply
+        env:
+          TF_VAR_admin_password: ${{ secrets.TF_VAR_admin_password }}
         run: terraform apply -auto-approve tfplan
 
   terraform-destroy:
@@ -141,4 +145,6 @@ jobs:
         run: terraform init
 
       - name: Terraform Destroy
+        env:
+          TF_VAR_admin_password: ${{ secrets.TF_VAR_admin_password }}
         run: terraform destroy -auto-approve
