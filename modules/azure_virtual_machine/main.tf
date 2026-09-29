@@ -7,7 +7,11 @@ resource "azurerm_linux_virtual_machine" "vm" {
   size                = each.value.size
   admin_username      = each.value.admin_username
   admin_password      = var.admin_password
-  delete_os_disk_on_deletion = true
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  delete_os_disk_on_termination = true
+
+  # Uncomment this line to delete the data disks automatically when deleting the VM
+  # delete_data_disks_on_termination = true
   network_interface_ids = [
     data.azurerm_network_interface.nic[each.key].id
   ]

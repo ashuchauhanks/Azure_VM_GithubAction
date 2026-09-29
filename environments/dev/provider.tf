@@ -15,5 +15,7 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    #  delete_os_disk_on_deletion = true
+  }
 }
