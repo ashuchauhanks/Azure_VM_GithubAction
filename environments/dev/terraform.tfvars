@@ -1,7 +1,7 @@
 resource_groups = {
   rg1 = {
     name     = "rg-terraform-dev"
-    location = "eastus"
+    location = "centralindia"
   }
 }
 
@@ -60,7 +60,7 @@ linux_virtual_machines = {
     name                   = "vm-linux-dev"
     resource_group_name    = "rg-terraform-dev"
     network_interface_name = "nic-linux-vm-dev"
-    size                   = "Standard_B2s"
+    size                   = "Standard_D2ads_v7"
     admin_username         = "azureuser"
     tags = {
       environment = "dev"

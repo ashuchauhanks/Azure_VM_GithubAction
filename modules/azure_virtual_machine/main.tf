@@ -24,6 +24,7 @@ source_image_reference {
   sku       = var.linux_image.sku
   version   = var.linux_image.version
 }
-
+# custom_data = filebase64("${path.root}/../../script-azure/bootstrap.sh")
+custom_data = filebase64("../../script-azure/bootstrap.sh")
   tags = each.value.tags
 }
