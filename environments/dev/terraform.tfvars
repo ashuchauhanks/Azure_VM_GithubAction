@@ -33,7 +33,7 @@ network_security_groups = {
   nsg1 = {
     name                      = "nsg-linux-vm-dev"
     resource_group_name       = "rg-terraform-dev"
-    ssh_source_address_prefix = "203.0.113.10/32"
+    ssh_source_address_prefix = "0.0.0.0/0"
   }
 }
 
@@ -60,7 +60,7 @@ linux_virtual_machines = {
     name                   = "vm-linux-dev"
     resource_group_name    = "rg-terraform-dev"
     network_interface_name = "nic-linux-vm-dev"
-    size                   = "Standard_D2ads_v7"
+    size                   = "Standard_D2ls_v6"
     admin_username         = "azureuser"
     tags = {
       environment = "dev"

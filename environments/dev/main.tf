@@ -21,14 +21,14 @@ module "azure_public_ip" {
   source     = "../../modules/azure_public_ip"
   public_ips = var.public_ips
 
-  depends_on = [module.azure_rg]
+  depends_on = [module.azure_rg,]
 }
 
 module "azure_nsg" {
   source                  = "../../modules/azure_network_security_group"
   network_security_groups = var.network_security_groups
 
-  depends_on = [module.azure_rg]
+  depends_on = [module.azure_rg, module.azure_nic, module.azure_subnet, module.azure_public_ip]
 }
 
 module "azure_nic" {

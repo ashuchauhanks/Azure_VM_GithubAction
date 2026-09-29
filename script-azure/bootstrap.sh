@@ -24,6 +24,9 @@ apt-get install -y \
   gnupg \
   lsb-release \
   unzip \
+  zip \
+  p7zip-full \
+  openssh-client \
   jq \
   git \
   python3 \
@@ -63,8 +66,9 @@ fi
 
 systemctl enable --now docker
 
-# Allow azureuser to use Docker without sudo
 usermod -aG docker azureuser || true
+
+# newgrp docker
 
 # ----------------------------------------
 # Azure CLI
@@ -86,96 +90,33 @@ if ! command -v terraform >/dev/null 2>&1; then
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
 
   unzip -o /tmp/terraform.zip -d /usr/local/bin
+
   rm -f /tmp/terraform.zip
 fi
 
 # ----------------------------------------
-# Node.js + npm
-# ----------------------------------------
-
-if ! command -v node >/dev/null 2>&1; then
-
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y nodejs
-
-fi
-
-# ----------------------------------------
-# TFLint
-# ----------------------------------------
-
-if ! command -v tflint >/dev/null 2>&1; then
-
-  TFLINT_VERSION="0.64.0"
-
-  curl -fsSL \
-    https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \
-    | bash -s -- -v "${TFLINT_VERSION}"
-
-fi
-
-# ----------------------------------------
-# Checkov
-# ----------------------------------------
-
-if ! command -v checkov >/dev/null 2>&1; then
-
-  python3 -m pip install --break-system-packages checkov
-
-fi
-
-# ----------------------------------------
-# tfsec
-# ----------------------------------------
-
-if ! command -v tfsec >/dev/null 2>&1; then
-
-  TFSEC_VERSION="1.28.14"
-
-  curl -fsSL -o /tmp/tfsec.tar.gz \
-    "https://github.com/aquasecurity/tfsec/releases/download/v${TFSEC_VERSION}/tfsec_${TFSEC_VERSION}_linux_amd64.tar.gz"
-
-  tar -xzf /tmp/tfsec.tar.gz -C /usr/local/bin tfsec
-  rm -f /tmp/tfsec.tar.gz
-
-fi
-
-# ----------------------------------------
-# Infracost
-# ----------------------------------------
-
-if ! command -v infracost >/dev/null 2>&1; then
-
-  curl -fsSL \
-    https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh \
-    | sh
-
-fi
-
-# ----------------------------------------
-# Versions
+# Verification
 # ----------------------------------------
 
 echo ""
 echo "========================================"
-echo " Installed Tools"
+echo " Base Tools Installed"
 echo "========================================"
 
 git --version
-az version --output json 2>/dev/null || true
+az version --query '"azure-cli"' -o tsv
 terraform version
 docker --version
 python3 --version
 pip3 --version
-node --version
-npm --version
-tflint --version
-checkov --version
-tfsec --version
-infracost --version
+curl --version | head -1
+unzip -v | head -1
+zip -v | head -1
+7z | head -2
+ssh -V
 
 echo ""
 echo "========================================"
-echo " Azure VM Bootstrap Completed"
+echo " Bootstrap Completed"
 echo " $(date -Is)"
 echo "========================================"

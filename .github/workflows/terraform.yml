@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
     inputs:
       action:
@@ -26,11 +28,22 @@ permissions:
 env:
   TF_WORKING_DIR: environments/dev
   TF_VERSION: "1.12.2"
+  ADO_POOL: "selfhost-aks"
 
 jobs:
+
+  # ========================================
+  # Terraform Plan
+  # ========================================
+
   terraform-plan:
     name: Terraform Validate & Plan
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.action == 'plan' ||
+      github.event.inputs.action == 'apply'
+
     runs-on: ubuntu-latest
 
     defaults:
@@ -38,6 +51,7 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -76,10 +90,20 @@ jobs:
           name: terraform-plan
           path: ${{ env.TF_WORKING_DIR }}/tfplan
 
+
+  # ========================================
+  # Terraform Apply
+  # ========================================
+
   terraform-apply:
-    name: Terraform Apply
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    name: Terraform Apply + ADO Agent
+
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'apply'
+
     needs: terraform-plan
+
     runs-on: ubuntu-latest
 
     defaults:
@@ -87,6 +111,7 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -116,9 +141,145 @@ jobs:
           TF_VAR_admin_password: ${{ secrets.TF_VAR_admin_password }}
         run: terraform apply -auto-approve tfplan
 
+      # ========================================
+      # Get VM Information
+      # ========================================
+
+      - name: Get VM Information
+        id: vm-info
+        run: |
+          VM_NAME=$(terraform output -json linux_vm_names | jq -r 'to_entries[0].value')
+          VM_ID=$(terraform output -json linux_vm_ids | jq -r 'to_entries[0].value')
+
+          echo "VM Name: $VM_NAME"
+          echo "VM ID: $VM_ID"
+
+          echo "vm_name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "vm_id=$VM_ID" >> "$GITHUB_OUTPUT"
+
+      # ========================================
+      # Wait for VM Running
+      # ========================================
+
+      - name: Wait for VM
+        env:
+          VM_ID: ${{ steps.vm-info.outputs.vm_id }}
+        run: |
+          echo "Waiting for VM to become ready..."
+
+          for i in {1..20}; do
+
+            STATE=$(az vm get-instance-view \
+              --ids "$VM_ID" \
+              --query "instanceView.statuses[?code=='PowerState/running'].displayStatus" \
+              -o tsv)
+
+            echo "VM State: $STATE"
+
+            if [ "$STATE" = "VM running" ]; then
+              echo "VM is running."
+              break
+            fi
+
+            if [ "$i" -eq 20 ]; then
+              echo "VM did not reach running state."
+              exit 1
+            fi
+
+            sleep 15
+          done
+
+      # ========================================
+      # Wait for Cloud-Init / bootstrap.sh
+      # ========================================
+
+      - name: Wait for VM Bootstrap
+        env:
+          VM_ID: ${{ steps.vm-info.outputs.vm_id }}
+        run: |
+          echo "Waiting for bootstrap.sh to complete..."
+
+          for i in {1..30}; do
+
+            STATUS=$(az vm run-command invoke \
+              --ids "$VM_ID" \
+              --command-id RunShellScript \
+              --scripts "test -f /var/log/azure-vm-bootstrap.log && grep -q 'Azure VM Bootstrap Completed' /var/log/azure-vm-bootstrap.log" \
+              --query "value[0].message" \
+              -o tsv 2>/dev/null || true)
+
+            if echo "$STATUS" | grep -q "Enable succeeded"; then
+              echo "Bootstrap completed."
+              break
+            fi
+
+            if [ "$i" -eq 30 ]; then
+              echo "Bootstrap did not complete within expected time."
+              exit 1
+            fi
+
+            echo "Bootstrap still running..."
+            sleep 20
+          done
+
+      # ========================================
+      # Configure Azure DevOps Agent
+      # ========================================
+
+      - name: Configure Azure DevOps Agent
+        env:
+          VM_ID: ${{ steps.vm-info.outputs.vm_id }}
+          ADO_PAT: ${{ secrets.ADO_PAT }}
+          ADO_ORG_URL: ${{ secrets.ADO_ORG_URL }}
+          ADO_POOL: ${{ env.ADO_POOL }}
+        run: |
+          echo "Configuring Azure DevOps self-hosted agent..."
+
+          az vm run-command invoke \
+            --ids "$VM_ID" \
+            --command-id RunShellScript \
+            --scripts "$(cat ../../script-azure/ado-agent.sh)" \
+            --parameters \
+              "ADO_ORG_URL=$ADO_ORG_URL" \
+              "ADO_PAT=$ADO_PAT" \
+              "ADO_POOL=$ADO_POOL"
+
+      # ========================================
+      # Verify Azure DevOps Agent
+      # ========================================
+
+      - name: Verify Azure DevOps Agent
+        env:
+          VM_ID: ${{ steps.vm-info.outputs.vm_id }}
+        run: |
+          echo "Checking Azure DevOps agent..."
+
+          az vm run-command invoke \
+            --ids "$VM_ID" \
+            --command-id RunShellScript \
+            --scripts '
+              if systemctl list-units --type=service --all | grep -q "vsts.agent"; then
+                echo "Azure DevOps agent service found."
+              else
+                echo "Azure DevOps agent service not found."
+                exit 1
+              fi
+            '
+
+          echo "Azure DevOps agent verification completed."
+
+
+  # ========================================
+  # Terraform Destroy
+  # ========================================
+
   terraform-destroy:
     name: Terraform Destroy
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'destroy'
+
     runs-on: ubuntu-latest
 
     defaults:
@@ -126,6 +287,7 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
