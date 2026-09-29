@@ -1,4 +1,4 @@
-name: Terraform Azure Infrastructure
+name: Terraform Azure VM Infrastructure
 
 on:
   push:
