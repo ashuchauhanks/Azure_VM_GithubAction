@@ -18,12 +18,12 @@ resource "azurerm_linux_virtual_machine" "vm" {
     storage_account_type = "Standard_LRS"
   }
 
-  source_image_reference {
-    publisher = data.azurerm_platform_image.linux[each.key].publisher
-    offer     = data.azurerm_platform_image.linux[each.key].offer
-    sku       = data.azurerm_platform_image.linux[each.key].sku
-    version   = data.azurerm_platform_image.linux[each.key].version
-  }
+source_image_reference {
+  publisher = var.linux_image.publisher
+  offer     = var.linux_image.offer
+  sku       = var.linux_image.sku
+  version   = var.linux_image.version
+}
 
   tags = each.value.tags
 }
