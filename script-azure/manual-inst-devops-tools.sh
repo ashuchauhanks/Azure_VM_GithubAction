@@ -16,24 +16,17 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-export DEBIAN_FRONTEND=noninteractive
-
 # ----------------------------------------
-# Base Packages
+# Required Commands Check
 # ----------------------------------------
 
-echo ""
-echo "Installing required packages..."
-
-apt-get update
-
-apt-get install -y \
-    curl \
-    unzip \
-    jq \
-    python3 \
-    python3-venv \
-    ca-certificates
+for cmd in curl unzip python3; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "ERROR: Required command not found: $cmd"
+        echo "These should already be installed by bootstrap.sh"
+        exit 1
+    fi
+done
 
 # ----------------------------------------
 # TFLint
@@ -44,10 +37,13 @@ echo "========================================"
 echo " TFLint"
 echo "========================================"
 
-if command -v tflint >/dev/null 2>&1; then
+if [ -x /usr/local/bin/tflint ]; then
+
     echo "TFLint already installed:"
-    tflint --version
+    /usr/local/bin/tflint --version
+
 else
+
     echo "Installing TFLint..."
 
     TMP_DIR=$(mktemp -d)
@@ -56,7 +52,9 @@ else
         https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip \
         -o "${TMP_DIR}/tflint.zip"
 
-    unzip -o "${TMP_DIR}/tflint.zip" -d "${TMP_DIR}"
+    unzip -o \
+        "${TMP_DIR}/tflint.zip" \
+        -d "${TMP_DIR}"
 
     install -m 0755 \
         "${TMP_DIR}/tflint" \
@@ -64,8 +62,8 @@ else
 
     rm -rf "${TMP_DIR}"
 
-    echo "TFLint installed:"
     /usr/local/bin/tflint --version
+
 fi
 
 # ----------------------------------------
@@ -80,21 +78,24 @@ echo "========================================"
 CHECKOV_VENV="/opt/checkov"
 
 if [ -x "${CHECKOV_VENV}/bin/checkov" ]; then
+
     echo "Checkov already installed."
+
 else
+
     echo "Installing Checkov..."
 
     python3 -m venv "${CHECKOV_VENV}"
 
     "${CHECKOV_VENV}/bin/pip" install --upgrade pip
     "${CHECKOV_VENV}/bin/pip" install --upgrade checkov
+
 fi
 
 ln -sf \
     "${CHECKOV_VENV}/bin/checkov" \
     /usr/local/bin/checkov
 
-echo "Checkov:"
 /usr/local/bin/checkov --version
 
 # ----------------------------------------
@@ -106,20 +107,29 @@ echo "========================================"
 echo " tfsec"
 echo "========================================"
 
-if command -v tfsec >/dev/null 2>&1; then
+if [ -x /usr/local/bin/tfsec ]; then
+
     echo "tfsec already installed:"
-    tfsec --version
+    /usr/local/bin/tfsec --version
+
 else
+
     echo "Installing tfsec..."
 
-    curl -s \
-        https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh \
-        | bash
+    TMP_DIR=$(mktemp -d)
 
-    chmod +x /usr/local/bin/tfsec
+    curl -fL \
+        https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 \
+        -o "${TMP_DIR}/tfsec"
 
-    echo "tfsec installed:"
+    install -m 0755 \
+        "${TMP_DIR}/tfsec" \
+        /usr/local/bin/tfsec
+
+    rm -rf "${TMP_DIR}"
+
     /usr/local/bin/tfsec --version
+
 fi
 
 # ----------------------------------------
@@ -131,20 +141,33 @@ echo "========================================"
 echo " Infracost"
 echo "========================================"
 
-if command -v infracost >/dev/null 2>&1; then
+if [ -x /usr/local/bin/infracost ]; then
+
     echo "Infracost already installed:"
-    infracost --version
+    /usr/local/bin/infracost --version
+
 else
+
     echo "Installing Infracost..."
 
-    curl -fsSL \
-        https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh \
-        | sh
+    TMP_DIR=$(mktemp -d)
 
-    chmod +x /usr/local/bin/infracost
+    curl -fL \
+        https://github.com/infracost/infracost/releases/latest/download/infracost-linux-amd64.tar.gz \
+        -o "${TMP_DIR}/infracost.tar.gz"
 
-    echo "Infracost installed:"
+    tar -xzf \
+        "${TMP_DIR}/infracost.tar.gz" \
+        -C "${TMP_DIR}"
+
+    install -m 0755 \
+        "${TMP_DIR}/infracost-linux-amd64/infracost" \
+        /usr/local/bin/infracost
+
+    rm -rf "${TMP_DIR}"
+
     /usr/local/bin/infracost --version
+
 fi
 
 # ----------------------------------------
@@ -179,4 +202,5 @@ infracost --version
 echo ""
 echo "========================================"
 echo " Installation Completed Successfully"
+echo " $(date -Is)"
 echo "========================================"
