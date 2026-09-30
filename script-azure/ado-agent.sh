@@ -14,21 +14,18 @@ echo "========================================"
 echo " Azure DevOps Agent Setup"
 echo "========================================"
 
-apt-get update
-
-apt-get install -y \
-  curl \
-  jq \
-  unzip \
-  tar \
-  git
-
 mkdir -p "${AGENT_DIR}"
 chown -R "${AGENT_USER}:${AGENT_USER}" "${AGENT_DIR}"
 
 cd "${AGENT_DIR}"
 
+# ----------------------------------------
+# Download & Extract Agent
+# ----------------------------------------
+
 if [ ! -f "${AGENT_DIR}/config.sh" ]; then
+
+  echo "ADO Agent not installed. Installing..."
 
   AGENT_PACKAGE="vsts-agent-linux-x64-${AGENT_VERSION}.tar.gz"
 
@@ -42,31 +39,86 @@ if [ ! -f "${AGENT_DIR}/config.sh" ]; then
 
   chown -R "${AGENT_USER}:${AGENT_USER}" "${AGENT_DIR}"
 
+else
+
+  echo "ADO Agent files already exist. Skipping download."
+
 fi
 
-if [ -f "${AGENT_DIR}/.agent" ]; then
-  echo "Agent already configured."
-  exit 0
+# ----------------------------------------
+# Configure Agent
+# ----------------------------------------
+
+if [ ! -f "${AGENT_DIR}/.agent" ]; then
+
+  echo "ADO Agent not configured. Configuring..."
+
+  sudo -u "${AGENT_USER}" bash -c "
+    cd '${AGENT_DIR}'
+
+    ./config.sh \
+      --unattended \
+      --url '${ADO_ORG_URL}' \
+      --auth pat \
+      --token '${ADO_PAT}' \
+      --pool '${ADO_POOL}' \
+      --agent '${AGENT_NAME}' \
+      --replace \
+      --acceptTeeEula
+  "
+
+else
+
+  echo "ADO Agent already configured. Skipping configuration."
+
 fi
 
-sudo -u "${AGENT_USER}" bash -c "
-cd '${AGENT_DIR}'
-
-./config.sh \
-  --unattended \
-  --url '${ADO_ORG_URL}' \
-  --auth pat \
-  --token '${ADO_PAT}' \
-  --pool '${ADO_POOL}' \
-  --agent '${AGENT_NAME}' \
-  --replace \
-  --acceptTeeEula
-"
+# ----------------------------------------
+# Agent Service
+# ----------------------------------------
 
 cd "${AGENT_DIR}"
 
-./svc.sh install "${AGENT_USER}"
-./svc.sh start
+if [ ! -f "${AGENT_DIR}/.service" ]; then
+
+  echo "ADO Agent service not installed. Installing..."
+
+  ./svc.sh install "${AGENT_USER}"
+
+else
+
+  echo "ADO Agent service already installed. Skipping service installation."
+
+fi
+
+# ----------------------------------------
+# Enable & Start Service
+# ----------------------------------------
+
+SERVICE_NAME=$(systemctl list-unit-files --type=service \
+  | awk '/^vsts\.agent\..*\.service/ {print $1; exit}')
+
+if [ -z "${SERVICE_NAME}" ]; then
+  echo "ERROR: Azure DevOps agent service not found."
+  exit 1
+fi
+
+echo "Agent Service: ${SERVICE_NAME}"
+
+systemctl enable "${SERVICE_NAME}"
+systemctl start "${SERVICE_NAME}"
+
+# ----------------------------------------
+# Verify
+# ----------------------------------------
+
+if systemctl is-active --quiet "${SERVICE_NAME}"; then
+  echo "Azure DevOps Agent service is running."
+else
+  echo "ERROR: Azure DevOps Agent service is not running."
+  systemctl status "${SERVICE_NAME}" --no-pager || true
+  exit 1
+fi
 
 echo ""
 echo "========================================"
@@ -77,3 +129,5 @@ echo "Organization : ${ADO_ORG_URL}"
 echo "Pool         : ${ADO_POOL}"
 echo "Agent        : ${AGENT_NAME}"
 echo "Directory    : ${AGENT_DIR}"
+echo "Service      : ${SERVICE_NAME}"
+echo "========================================"
