@@ -2,93 +2,181 @@
 set -euo pipefail
 
 echo "========================================"
-echo " DevOps Tools Installation Started"
+echo " DevOps Tools Installation"
 echo " $(date -Is)"
 echo "========================================"
 
 # ----------------------------------------
-# Node.js + npm
+# Root Check
 # ----------------------------------------
 
-if ! command -v node >/dev/null 2>&1; then
-
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-
-  apt-get install -y nodejs
-
+if [ "$EUID" -ne 0 ]; then
+    echo "ERROR: Run with sudo"
+    echo "Usage: sudo bash ~/manual-inst-devops-tools.sh"
+    exit 1
 fi
+
+export DEBIAN_FRONTEND=noninteractive
+
+# ----------------------------------------
+# Base Packages
+# ----------------------------------------
+
+echo ""
+echo "Installing required packages..."
+
+apt-get update
+
+apt-get install -y \
+    curl \
+    unzip \
+    jq \
+    python3 \
+    python3-venv \
+    ca-certificates
 
 # ----------------------------------------
 # TFLint
 # ----------------------------------------
 
-if ! command -v tflint >/dev/null 2>&1; then
+echo ""
+echo "========================================"
+echo " TFLint"
+echo "========================================"
 
-  TFLINT_VERSION="0.64.0"
+if command -v tflint >/dev/null 2>&1; then
+    echo "TFLint already installed:"
+    tflint --version
+else
+    echo "Installing TFLint..."
 
-  curl -fsSL \
-    https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \
-    | bash -s -- -v "${TFLINT_VERSION}"
+    TMP_DIR=$(mktemp -d)
 
+    curl -fL \
+        https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip \
+        -o "${TMP_DIR}/tflint.zip"
+
+    unzip -o "${TMP_DIR}/tflint.zip" -d "${TMP_DIR}"
+
+    install -m 0755 \
+        "${TMP_DIR}/tflint" \
+        /usr/local/bin/tflint
+
+    rm -rf "${TMP_DIR}"
+
+    echo "TFLint installed:"
+    /usr/local/bin/tflint --version
 fi
 
 # ----------------------------------------
 # Checkov
 # ----------------------------------------
 
-if ! command -v checkov >/dev/null 2>&1; then
+echo ""
+echo "========================================"
+echo " Checkov"
+echo "========================================"
 
-  python3 -m pip install --break-system-packages checkov
+CHECKOV_VENV="/opt/checkov"
 
+if [ -x "${CHECKOV_VENV}/bin/checkov" ]; then
+    echo "Checkov already installed."
+else
+    echo "Installing Checkov..."
+
+    python3 -m venv "${CHECKOV_VENV}"
+
+    "${CHECKOV_VENV}/bin/pip" install --upgrade pip
+    "${CHECKOV_VENV}/bin/pip" install --upgrade checkov
 fi
+
+ln -sf \
+    "${CHECKOV_VENV}/bin/checkov" \
+    /usr/local/bin/checkov
+
+echo "Checkov:"
+/usr/local/bin/checkov --version
 
 # ----------------------------------------
 # tfsec
 # ----------------------------------------
 
-if ! command -v tfsec >/dev/null 2>&1; then
+echo ""
+echo "========================================"
+echo " tfsec"
+echo "========================================"
 
-  TFSEC_VERSION="1.28.14"
+if command -v tfsec >/dev/null 2>&1; then
+    echo "tfsec already installed:"
+    tfsec --version
+else
+    echo "Installing tfsec..."
 
-  curl -fsSL -o /tmp/tfsec.tar.gz \
-    "https://github.com/aquasecurity/tfsec/releases/download/v${TFSEC_VERSION}/tfsec_${TFSEC_VERSION}_linux_amd64.tar.gz"
+    curl -s \
+        https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh \
+        | bash
 
-  tar -xzf /tmp/tfsec.tar.gz -C /usr/local/bin tfsec
+    chmod +x /usr/local/bin/tfsec
 
-  rm -f /tmp/tfsec.tar.gz
-
+    echo "tfsec installed:"
+    /usr/local/bin/tfsec --version
 fi
 
 # ----------------------------------------
 # Infracost
 # ----------------------------------------
 
-if ! command -v infracost >/dev/null 2>&1; then
+echo ""
+echo "========================================"
+echo " Infracost"
+echo "========================================"
 
-  curl -fsSL \
-    https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh \
-    | sh
+if command -v infracost >/dev/null 2>&1; then
+    echo "Infracost already installed:"
+    infracost --version
+else
+    echo "Installing Infracost..."
 
+    curl -fsSL \
+        https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh \
+        | sh
+
+    chmod +x /usr/local/bin/infracost
+
+    echo "Infracost installed:"
+    /usr/local/bin/infracost --version
 fi
 
 # ----------------------------------------
-# Verification
+# Final Verification
 # ----------------------------------------
 
 echo ""
 echo "========================================"
-echo " DevOps Tools Installed"
+echo " FINAL TOOL CHECK"
 echo "========================================"
 
-node --version
-npm --version
+echo ""
+echo "TFLint:"
+command -v tflint
 tflint --version
+
+echo ""
+echo "Checkov:"
+command -v checkov
 checkov --version
+
+echo ""
+echo "tfsec:"
+command -v tfsec
 tfsec --version
+
+echo ""
+echo "Infracost:"
+command -v infracost
 infracost --version
 
 echo ""
 echo "========================================"
-echo " DevOps Tools Installation Completed"
-echo " $(date -Is)"
+echo " Installation Completed Successfully"
 echo "========================================"
