@@ -204,3 +204,9 @@ echo "========================================"
 echo " Installation Completed Successfully"
 echo " $(date -Is)"
 echo "========================================"
+
+
+sudo az aks install-cli
+
+kubectl version --client
+which kubectl
